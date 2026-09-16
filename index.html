@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Devil Tournament - User</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<style>
+body {
+    background: #050505!important;
+    background-image:
+        radial-gradient(circle at 20% 80%, #1a0033 0%, transparent 50%),
+        radial-gradient(circle at 80% 20%, #001a33 0%, transparent 50%);
+    color: #e5e5e5;
+}
+.glass {
+    background: rgba(17,17,17,0.85);
+    backdrop-filter: blur(12px);
+    border: 1px solid #222;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+.tab-btn.active { background: linear-gradient(135deg, #1e3a8a, #3b82f6)!important; }
+.hidden { display: none; }
+</style>
+</head>
+<body class="pb-20">
+
+<!-- Banned Screen -->
+<div id="bannedScreen" class="hidden fixed inset-0 bg-black flex items-center justify-center z-50">
+    <div class="text-center p-6 glass rounded-2xl max-w-sm">
+        <i class="fa-solid fa-ban text-8xl text-red-600 mb-6"></i>
+        <h1 class="text-3xl font-bold text-red-500 mb-3">Account Banned</h1>
+        <p class="text-sm text-yellow-400 mb-6" id="banReasonText"></p>
+        <button onclick="logout()" class="bg-red-600 px-6 py-3 rounded-lg font-bold w-full">Logout</button>
+    </div>
+</div>
+
+<!-- Auth Screen -->
+<div id="authScreen" class="max-w-md mx-auto mt-10 p-4">
+    <div class="glass p-6 rounded-2xl">
+        <h1 class="text-3xl font-bold text-center mb-6 bg-gradient-to-r from-red-400 to-orange-500 bg-clip-text text-transparent">Devil Tournament</h1>
+        <div id="loginDiv">
+            <input type="email" id="loginEmail" placeholder="Email" class="w-full p-3 bg-black border-gray-700 rounded-lg mb-3">
+            <input type="password" id="loginPass" placeholder="Password" class="w-full p-3 bg-black border-gray-700 rounded-lg mb-4">
+            <button onclick="login()" class="w-full bg-blue-600 p-3 rounded-lg font-bold mb-3">Login</button>
+            <p class="text-center text-sm text-gray-400">Dont have an account? <a href="javascript:void(0)" onclick="toggleAuth()" class="text-blue-400">Signup</a></p>
+        </div>
+        <div id="signupDiv" class="hidden">
+            <input type="text" id="signupName" placeholder="Username" class="w-full p-3 bg-black border-gray-700 rounded-lg mb-3">
+            <input type="text" id="signupGameName" placeholder="In game name" class="w-full p-3 bg-black border-gray-700 rounded-lg mb-3">
+            <input type="email" id="signupEmail" placeholder="Email" class="w-full p-3 bg-black border-gray-700 rounded-lg mb-3">
+            <input type="password" id="signupPass" placeholder="Password (min 6 chars)" class="w-full p-3 bg-black border-gray-700 rounded-lg mb-4">
+            <button onclick="signup()" class="w-full bg-green-600 p-3 rounded-lg font-bold mb-3">Create Account</button>
+            <p class="text-center text-sm text-gray-400">already Have an account? <a href="javascript:void(0)" onclick="toggleAuth()" class="text-blue-400">Login</a></p>
+        </div>
+    </div>
+</div>
+
+<!-- Main App -->
+<div id="mainApp" class="hidden">
+    <header class="p-4 sticky top-0 z-10 bg-black bg-opacity-80 backdrop-blur-sm">
+        <div class="flex justify-between items-center">
+            <h1 class="text-xl font-bold bg-gradient-to-r from-red-400 to-orange-500 bg-clip-text text-transparent">Devil Tournament</h1>
+            <div class="flex items-center gap-3">
+                <button onclick="showPage(event, 'notifications')" class="relative">
+                    <i class="fa-solid fa-bell text-xl text-yellow-400"></i>
+                    <span id="notifBadge" class="hidden absolute -top-1 -right-1 bg-red-600 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold"></span>
+                </button>
+                <div class="glass px-3 py-1.5 rounded-full flex items-center">
+                    <i class="fa-solid fa-wallet text-yellow-400 mr-2"></i>
+                    <p class="font-bold text-yellow-400" id="walletBalance">PKR 0.00</p>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div id="homePage" class="p-4"><h2 class="text-xl font-bold mb-4">Active Tournaments</h2><div id="tournamentList"></div></div>
+    <div id="myTournamentsPage" class="p-4 hidden"><h2 class="text-xl font-bold mb-4 text-green-400"><i class="fa-solid fa-gamepad"></i> My Joined Tournaments</h2><div id="myTournamentList"></div></div>
+    <div id="notificationsPage" class="p-4 hidden"><h2 class="text-xl font-bold mb-4 text-yellow-400"><i class="fa-solid fa-bell"></i> Notifications</h2><div id="notificationsList"></div></div>
+    <div id="leaderboardPage" class="p-4 hidden"><h2 class="text-xl font-bold mb-4 text-yellow-400"><i class="fa-solid fa-ranking-star"></i> Leaderboard</h2><div id="leaderboardList"></div></div>
+    <div id="walletPage" class="p-4 hidden">
+        <div class="glass p-6 rounded-2xl text-center mb-6">
+            <p class="text-sm text-gray-400 mb-1">Available Balance</p>
+            <p class="text-4xl font-bold text-yellow-400 mb-4" id="walletBig">PKR 0.00</p>
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="showDepositModal()" class="bg-green-600 p-3 rounded-lg font-bold">Deposit</button>
+                <button onclick="showWithdrawModal()" class="bg-red-600 p-3 rounded-lg font-bold">Withdraw</button>
+            </div>
+        </div>
+        <h3 class="font-bold mb-3">Transaction History</h3><div id="transactionHistory"></div>
+    </div>
+    <div id="profilePage" class="p-4 hidden">
+        <div class="glass p-6 rounded-2xl text-center mb-6">
+            <div class="w-24 h-24 bg-gradient-to-br from-red-500 to-orange-600 rounded-full mx-auto mb-4 flex items-center justify-center"><i class="fa-solid fa-user text-4xl"></i></div>
+            <h2 class="text-2xl font-bold" id="profileName">User</h2>
+            <p class="text-gray-400 text-sm" id="profileEmail">user@mail.com</p>
+            <p class="text-green-400 text-sm mt-1">Game: <span id="profileGameName">Not Set</span></p>
+        </div>
+        <div class="grid grid-cols-3 gap-3 mb-6">
+            <div class="glass p-4 rounded-xl text-center"><p class="text-2xl font-bold text-green-400" id="totalPlayed">0</p><p class="text-xs text-gray-400">Played</p></div>
+            <div class="glass p-4 rounded-xl text-center"><p class="text-2xl font-bold text-yellow-400" id="totalWon">0</p><p class="text-xs text-gray-400">Won</p></div>
+            <div class="glass p-4 rounded-xl text-center"><p class="text-2xl font-bold text-blue-400" id="totalEarned">0</p><p class="text-xs text-gray-400">Earned</p></div>
+        </div>
+        <button onclick="logout()" class="w-full bg-red-600 p-3 rounded-lg font-bold"><i class="fa-solid fa-right-from-bracket mr-2"></i>Logout</button>
+    </div>
+
+    <div class="fixed bottom-0 left-0 right-0 bg-black border-t border-gray-800">
+        <div class="grid grid-cols-6 gap-1 p-2">
+            <button onclick="showPage(event, 'home')" class="tab-btn active p-2 rounded-lg text-center"><i class="fa-solid fa-home"></i><p class="text-xs mt-1">Home</p></button>
+            <button onclick="showPage(event, 'myTournaments')" class="tab-btn p-2 rounded-lg text-center bg-gray-800"><i class="fa-solid fa-gamepad"></i><p class="text-xs mt-1">Joined</p></button>
+            <button onclick="showPage(event, 'notifications')" class="tab-btn p-2 rounded-lg text-center bg-gray-800"><i class="fa-solid fa-bell"></i><p class="text-xs mt-1">Alerts</p></button>
+            <button onclick="showPage(event, 'leaderboard')" class="tab-btn p-2 rounded-lg text-center bg-gray-800"><i class="fa-solid fa-ranking-star"></i><p class="text-xs mt-1">Rank</p></button>
+            <button onclick="showPage(event, 'wallet')" class="tab-btn p-2 rounded-lg text-center bg-gray-800"><i class="fa-solid fa-wallet"></i><p class="text-xs mt-1">Wallet</p></button>
+            <button onclick="showPage(event, 'profile')" class="tab-btn p-2 rounded-lg text-center bg-gray-800"><i class="fa-solid fa-user"></i><p class="text-xs mt-1">Profile</p></button>
+        </div>
+    </div>
+</div>
+
+<!-- Modals -->
+<div id="depositModal" class="hidden fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center p-4 z-50">
+    <div class="glass p-6 rounded-2xl max-w-md w-full">
+        <h2 class="text-xl font-bold mb-4 text-green-400">Deposit Money</h2>
+        <div class="bg-black p-3 rounded-lg mb-3"><p class="text-sm text-gray-400 mb-1">Easypaisa</p><p class="font-bold" id="epNumber">03116611590</p><p class="text-sm" id="epName">Rabia Rasheed</p></div>
+        <div class="bg-black p-3 rounded-lg mb-4"><p class="text-sm text-gray-400 mb-1">JazzCash</p><p class="font-bold" id="jcNumber">03315280694</p><p class="text-sm" id="jcName">Rabia Rasheed</p></div>
+        <input type="number" id="depositAmount" placeholder="Amount PKR" class="w-full p-3 bg-black border-gray-700 rounded-lg mb-2">
+        <input type="text" id="depositTid" placeholder="Transaction ID" class="w-full p-3 bg-black border-gray-700 rounded-lg mb-2">
+        <select id="depositMethod" class="w-full p-3 bg-black border-gray-700 rounded-lg mb-4"><option value="easypaisa">Easypaisa</option><option value="jazzcash">JazzCash</option></select>
+        <div class="grid grid-cols-2 gap-2"><button onclick="closeDepositModal()" class="bg-gray-700 p-3 rounded-lg font-bold">Cancel</button><button onclick="submitDeposit()" class="bg-green-600 p-3 rounded-lg font-bold">Submit</button></div>
+    </div>
+</div>
+<div id="withdrawModal" class="hidden fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center p-4 z-50">
+    <div class="glass p-6 rounded-2xl max-w-md w-full">
+        <h2 class="text-xl font-bold mb-4 text-red-400">Withdraw Money</h2>
+        <p class="text-sm text-gray-400 mb-3">Available: <span class="text-yellow-400 font-bold" id="withdrawBalance">PKR 0</span></p>
+        <input type="number" id="withdrawAmount" placeholder="Amount PKR" class="w-full p-3 bg-black border-gray-700 rounded-lg mb-2">
+        <select id="withdrawMethod" class="w-full p-3 bg-black border-gray-700 rounded-lg mb-2"><option value="easypaisa">Easypaisa</option><option value="jazzcash">JazzCash</option></select>
+        <input type="text" id="withdrawAccount" placeholder="Account Number" class="w-full p-3 bg-black border-gray-700 rounded-lg mb-2">
+        <input type="text" id="withdrawName" placeholder="Account Holder Name" class="w-full p-3 bg-black border-gray-700 rounded-lg mb-4">
+        <div class="grid grid-cols-2 gap-2"><button onclick="closeWithdrawModal()" class="bg-gray-700 p-3 rounded-lg font-bold">Cancel</button><button onclick="submitWithdraw()" class="bg-red-600 p-3 rounded-lg font-bold">Withdraw</button></div>
+    </div>
+</div>
+<div id="joinModal" class="hidden fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center p-4 z-50">
+    <div class="glass p-6 rounded-2xl max-w-md w-full">
+        <h2 class="text-xl font-bold mb-4 text-blue-400">Join Tournament</h2>
+        <p class="text-sm text-gray-400 mb-3" id="joinTName"></p>
+        <p class="text-sm text-yellow-400 mb-4">Entry Fee: PKR <span id="joinTFee"></span></p>
+        <input type="text" id="joinGameUsername" placeholder="Your Game Username" class="w-full p-3 bg-black border-gray-700 rounded-lg mb-4">
+        <div class="grid grid-cols-2 gap-2"><button onclick="closeJoinModal()" class="bg-gray-700 p-3 rounded-lg font-bold">Cancel</button><button onclick="confirmJoin()" class="bg-green-600 p-3 rounded-lg font-bold">Pay & Join</button></div>
+    </div>
+</div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyACOFm5J0rqrRFovU_r892_teTtNZqUY-0",
+  authDomain: "arslan-c6969.firebaseapp.com",
+  databaseURL: "https://arslan-c6969-default-rtdb.firebaseio.com",
+  projectId: "arslan-c6969",
+  storageBucket: "arslan-c6969.firebasestorage.app",
+  messagingSenderId: "979564391945",
+  appId: "1:979564391945:web:aa35d82123188f0a04d2d8"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.database();
+let currentUser = null;
+let selectedTid = null;
+
+auth.onAuthStateChanged((user) => {
+    if(user){
+        db.ref('users/'+user.uid).once('value').then(snap=>{
+            const u = snap.val();
+            if(u && u.is_banned === true){
+                document.getElementById('bannedScreen').classList.remove('hidden');
+                document.getElementById('authScreen').classList.add('hidden');
+                document.getElementById('mainApp').classList.add('hidden');
+                document.getElementById('banReasonText').innerText = 'Reason: '+(u.ban_reason||'No reason');
+                return;
+            }
+            currentUser = user;
+            document.getElementById('authScreen').classList.add('hidden');
+            document.getElementById('mainApp').classList.remove('hidden');
+            document.getElementById('bannedScreen').classList.add('hidden');
+            loadUserData();
+            loadTournaments();
+            loadTransactions();
+            loadMyTournaments();
+            loadNotifications();
+        });
+    } else {
+        currentUser = null;
+        document.getElementById('authScreen').classList.remove('hidden');
+        document.getElementById('mainApp').classList.add('hidden');
+        document.getElementById('bannedScreen').classList.add('hidden');
+    }
+});
+
+function toggleAuth(){
+    document.getElementById('loginDiv').classList.toggle('hidden');
+    document.getElementById('signupDiv').classList.toggle('hidden');
+}
+function login(){
+    const email = document.getElementById('loginEmail').value.trim();
+    const pass = document.getElementById('loginPass').value;
+    if(!email||!pass) return alert('Fill all fields');
+    auth.signInWithEmailAndPassword(email, pass).catch(e=>alert('Login Error: '+e.message));
+}
+function signup(){
+    const email = document.getElementById('signupEmail').value.trim();
+    const pass = document.getElementById('signupPass').value;
+    const name = document.getElementById('signupName').value.trim();
+    const gameName = document.getElementById('signupGameName').value.trim();
+    if(!email||!pass||!name||!gameName) return alert('Fill all fields');
+    if(pass.length < 6) return alert('Password must be 6+ characters');
+    auth.createUserWithEmailAndPassword(email, pass)
+  .then((cred)=>{
+        return db.ref('users/'+cred.user.uid).set({
+            username: name, game_username: gameName, email: email,
+            wallet_balance: 0, total_played: 0, total_won: 0, total_earned: 0, is_banned: false, created_at: Date.now()
+        });
+    })
+  .then(()=>{ alert('Account Created Successfully!'); })
+  .catch(e=>{ alert('Signup Error: '+e.message); });
+}
+function logout(){ auth.signOut(); }
+
+function loadUserData(){
+    db.ref('users/'+currentUser.uid).on('value',(snap)=>{
+        const u = snap.val();
+        if(u){
+            document.getElementById('walletBalance').innerText = 'PKR ' + parseFloat(u.wallet_balance||0).toFixed(2);
+            document.getElementById('walletBig').innerText = 'PKR ' + parseFloat(u.wallet_balance||0).toFixed(2);
+            document.getElementById('withdrawBalance').innerText = 'PKR ' + parseFloat(u.wallet_balance||0).toFixed(2);
+            document.getElementById('profileName').innerText = u.username || 'User';
+            document.getElementById('profileEmail').innerText = u.email || currentUser.email;
+            document.getElementById('profileGameName').innerText = u.game_username || 'Not Set';
+            document.getElementById('totalPlayed').innerText = u.total_played || 0;
+            document.getElementById('totalWon').innerText = u.total_won || 0;
+            document.getElementById('totalEarned').innerText = u.total_earned || 0;
+        }
+    });
+    db.ref('settings').once('value').then(snap=>{
+        const s = snap.val();
+        if(s){
+            document.getElementById('epNumber').innerText = s.easypaisa_number || '03116611590';
+            document.getElementById('epName').innerText = s.easypaisa_name || 'Rabia Rasheed';
+            document.getElementById('jcNumber').innerText = s.jazzcash_number || '03315280694';
+            document.getElementById('jcName').innerText = s.jazzcash_name || 'Rabia Rasheed';
+        }
+    });
+}
+
+function showPage(event, page){
+    ['home','myTournaments','notifications','leaderboard','wallet','profile'].forEach(p=>{
+        document.getElementById(p+'Page').classList.add('hidden');
+    });
+    document.querySelectorAll('.tab-btn').forEach(btn => {btn.classList.remove('active'); btn.classList.add('bg-gray-800');});
+    document.getElementById(page+'Page').classList.remove('hidden');
+    event.target.closest('.tab-btn').classList.add('active');
+    event.target.closest('.tab-btn').classList.remove('bg-gray-800');
+    if(page=='leaderboard') loadLeaderboard();
+    if(page=='myTournaments') loadMyTournaments();
+    if(page=='notifications') markNotificationsRead();
+}
+
+function loadNotifications(){
+    db.ref('notifications/'+currentUser.uid).orderByChild('created_at').limitToLast(50).on('value', (snap)=>{
+        const data = snap.val();
+        let html = ''; let unreadCount = 0;
+        if(data){
+            let arr = [];
+            Object.keys(data).forEach(k=> arr.push({key: k,...data[k]}));
+            arr.reverse();
+            arr.forEach(notif=>{
+                if(!notif.read) unreadCount++;
+                const readClass = notif.read? 'opacity-50' : 'border-l-4 border-blue-500';
+                const iconClass = notif.type=='room_details'? 'fa-key text-green-400' : 'fa-bell text-yellow-400';
+                html += `<div onclick="openNotification('${notif.key}')" class="glass p-4 rounded-xl mb-3 cursor-pointer ${readClass}">
+                    <div class="flex items-start gap-3">
+                        <i class="fa-solid ${iconClass} text-xl mt-1"></i>
+                        <div class="flex-1">
+                            <p class="font-bold ${notif.read?'text-gray-400':'text-white'}">${notif.title}</p>
+                            <p class="text-sm text-gray-400 mt-1">${notif.message}</p>
+                            <p class="text-xs text-gray-500 mt-2">${new Date(notif.created_at).toLocaleString('en-PK')}</p>
+                        </div>
+                        ${!notif.read? '<span class="w-2 h-2 bg-blue-500 rounded-full"></span>' : ''}
+                    </div>
+                </div>`;
+            });
+        } else html = '<p class="text-center text-gray-500 glass p-4 rounded">No notifications yet</p>';
+        document.getElementById('notificationsList').innerHTML = html;
+        const badge = document.getElementById('notifBadge');
+        if(unreadCount > 0){ badge.innerText = unreadCount; badge.classList.remove('hidden'); }
+        else { badge.classList.add('hidden'); }
+    });
+}
+function openNotification(notifKey){
+    db.ref('notifications/'+currentUser.uid+'/'+notifKey+'/read').set(true);
+    showPage(event, 'myTournaments');
+}
+function markNotificationsRead(){
+    db.ref('notifications/'+currentUser.uid).once('value').then(snap=>{
+        snap.forEach(child=>{
+            if(!child.val().read){
+                db.ref('notifications/'+currentUser.uid+'/'+child.key+'/read').set(true);
+            }
+        });
+    });
+}
+
+function loadTournaments(){
+    db.ref('tournaments').on('value',(snap)=>{
+        const data = snap.val();
+        let html = '';
+        if(data){
+            Object.keys(data).forEach(key=>{
+                const t = data[key];
+                if(t.status=='completed' && t.prizes_distributed) return;
+                const joined = t.participants && t.participants[currentUser.uid];
+                const full = (t.current_players||0) >= t.max_players;
+                const startTime = t.start_time? new Date(t.start_time).toLocaleString('en-PK', {dateStyle: 'short', timeStyle: 'short'}) : 'TBA';
+                const rewardType = t.reward_type || 'prize';
+                let rewardDetails = '';
+                if(rewardType === 'perkill'){
+                    rewardDetails = `<div class="text-sm mb-3"><p class="font-bold text-green-400"><i class="fa-solid fa-crosshairs"></i> Per Kill: PKR ${t.per_kill_amount || 0}</p></div>`;
+                }else{
+                    rewardDetails = `<div class="text-xs text-gray-500 mb-3"><p>1st:PKR ${t.prize_1st || 0} 2nd:PKR ${t.prize_2nd || 0} 3rd:PKR ${t.prize_3rd || 0} 4th:PKR ${t.prize_4th || 0}</p></div>`;
+                }
+                html += `<div class="glass p-4 rounded-xl mb-4">
+                    <div class="flex justify-between items-start mb-2">
+                        <div><h3 class="font-bold text-lg">${t.title}</h3><p class="text-sm text-gray-400">${t.game}</p></div>
+                        <span class="text-xs px-2 py-1 rounded-full ${t.status=='live'?'bg-red-600':t.status=='upcoming'?'bg-blue-600':'bg-gray-600'}">${t.status}</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-sm mb-3">
+                        <div><p class="text-gray-400">Entry Fee</p><p class="font-bold text-yellow-400">PKR ${t.entry_fee}</p></div>
+                        <div><p class="text-gray-400">Type</p><p class="font-bold text-green-400">${rewardType === 'perkill'? 'Per Kill' : 'Prize Pool'}</p></div>
+                    </div>
+                    ${rewardDetails}
+                    <p class="text-xs text-gray-400 mb-2"><i class="fa-solid fa-clock"></i> Start: ${startTime}</p>
+                    <div class="w-full bg-gray-800 rounded-full h-2 mb-2"><div class="bg-gradient-to-r from-red-500 to-orange-600 h-2 rounded-full" style="width:${((t.current_players||0)/t.max_players)*100}%"></div></div>
+                    <p class="text-xs text-gray-400 mb-3">${t.current_players||0}/${t.max_players} Players</p>
+                    ${joined?`<button class="w-full bg-green-700 p-3 rounded-lg font-bold" disabled><i class="fa-solid fa-check"></i> Joined</button>`:
+                    full?`<button class="w-full bg-gray-700 p-3 rounded-lg font-bold" disabled>Tournament Full</button>`:
+                    `<button onclick="joinTournament('${key}')" class="w-full bg-gradient-to-r from-red-600 to-orange-600 p-3 rounded-lg font-bold">Join Now</button>`}
+                </div>`;
+            });
+        }
+        document.getElementById('tournamentList').innerHTML = html || '<p class="text-center text-gray-500 glass p-4 rounded">No tournaments available</p>';
+    });
+}
+
+function loadMyTournaments(){
+    db.ref('tournaments').on('value',(snap)=>{
+        const data = snap.val();
+        let html = '';
+        if(data){
+            Object.keys(data).forEach(key=>{
+                const t = data[key];
+                const joined = t.participants && t.participants[currentUser.uid];
+                if(!joined) return;
+                const startTime = t.start_time? new Date(t.start_time).toLocaleString('en-PK', {dateStyle: 'short', timeStyle: 'short'}) : 'TBA';
+                const timeLeft = t.start_time? Math.floor((t.start_time - Date.now()) / 60000) : 0;
+                const canShowRoom = t.room_id && t.room_pass && t.start_time && timeLeft <= 10 && timeLeft >= -120;
+                const rewardType = t.reward_type || 'prize';
+                const kills = joined.kills || 0;
+                const perKillAmount = t.per_kill_amount || 0;
+                const earned = kills * perKillAmount;
+                let rewardText = '';
+                if(rewardType === 'perkill'){
+                    rewardText = `<div class="bg-green-900 border-green-700 p-3 rounded-lg mb-3">
+                        <p class="text-xs text-green-400 font-bold mb-1"><i class="fa-solid fa-crosshairs"></i> Per Kill: PKR ${perKillAmount}</p>
+                        <p class="text-sm text-white">Your Kills: <span class="font-bold text-yellow-400">${kills}</span></p>
+                        <p class="text-sm text-white">Earned: <span class="font-bold text-yellow-400">PKR ${earned}</span></p>
+                    </div>`;
+                }else{
+                    rewardText = `<p class="text-xs text-gray-500 mb-2">Prize Pool: PKR ${t.prize_pool || 0}</p>`;
+                }
+                html += `<div class="glass p-4 rounded-xl mb-4">
+                    <div class="flex justify-between items-start mb-2">
+                        <div><h3 class="font-bold text-lg">${t.title}</h3><p class="text-sm text-gray-400">${t.game}</p></div>
+                        <span class="text-xs px-2 py-1 rounded-full ${t.status=='live'?'bg-red-600':t.status=='upcoming'?'bg-blue-600':'bg-gray-600'}">${t.status}</span>
+                    </div>
+                    <p class="text-xs text-yellow-400 mb-2"><i class="fa-solid fa-clock"></i> Start: ${startTime}</p>
+                    ${canShowRoom?`<div class="bg-green-900 border-green-700 p-4 rounded-lg mb-3"><p class="text-xs text-green-400 mb-2 font-bold"><i class="fa-solid fa-key"></i> ROOM DETAILS</p><div class="bg-black p-3 rounded mb-2"><p class="text-xs text-gray-400">Room ID</p><p class="text-lg font-bold text-white">${t.room_id}</p></div><div class="bg-black p-3 rounded"><p class="text-xs text-gray-400">Password</p><p class="text-lg font-bold text-white">${t.room_pass}</p></div></div>`:timeLeft > 10?`<div class="bg-blue-900 border-blue-700 p-3 rounded-lg mb-3"><p class="text-xs text-blue-400"><i class="fa-solid fa-info-circle"></i> Room ID & Password will be shown 10 minutes before start</p></div>`:''}
+                    <p class="text-xs text-gray-400 mb-2">Your Game Name: <span class="text-green-400 font-bold">${joined.game_username}</span></p>
+                    ${rewardText}
+                </div>`;
+            });
+        }
+        document.getElementById('myTournamentList').innerHTML = html || '<p class="text-center text-gray-500 glass p-4 rounded">You haven\'t joined any tournaments yet</p>';
+    });
+}
+
+function joinTournament(tid){
+    selectedTid = tid;
+    db.ref('tournaments/'+tid).once('value').then(snap=>{
+        const t = snap.val();
+        document.getElementById('joinTName').innerText = t.title;
+        document.getElementById('joinTFee').innerText = t.entry_fee;
+        db.ref('users/'+currentUser.uid+'/game_username').once('value').then(gsnap=>{
+            document.getElementById('joinGameUsername').value = gsnap.val() || '';
+        });
+        document.getElementById('joinModal').classList.remove('hidden');
+    });
+}
+function closeJoinModal(){ document.getElementById('joinModal').classList.add('hidden'); }
+function confirmJoin(){
+    const gameUsername = document.getElementById('joinGameUsername').value.trim();
+    if(!gameUsername) return alert('Enter your game username');
+    db.ref('tournaments/'+selectedTid).once('value').then(snap=>{
+        const t = snap.val();
+        db.ref('users/'+currentUser.uid).once('value').then(usnap=>{
+            const u = usnap.val();
+            if(parseFloat(u.wallet_balance||0) < parseFloat(t.entry_fee)) return alert('Insufficient balance! Please deposit first.');
+            const newBal = parseFloat(u.wallet_balance) - parseFloat(t.entry_fee);
+            db.ref('users/'+currentUser.uid).update({
+                wallet_balance: newBal, total_played: (u.total_played||0) + 1, game_username: gameUsername
+            });
+            db.ref('tournaments/'+selectedTid+'/participants/'+currentUser.uid).set({
+                joined_at: Date.now(), game_username: gameUsername, kills: 0
+            });
+            db.ref('tournaments/'+selectedTid+'/current_players').transaction(curr=>(curr||0)+1);
+            alert('Joined Successfully!');
+            closeJoinModal();
+        });
+    });
+}
+
+function loadLeaderboard(){
+    db.ref('leaderboard').orderByChild('timestamp').limitToLast(50).once('value').then(snap=>{
+        const data = snap.val();
+        let html = '<h3 class="text-lg font-bold mb-3 text-yellow-400">Recent Winners</h3>';
+        if(data){
+            let arr = [];
+            Object.keys(data).forEach(k=> arr.push(data[k]));
+            arr.sort((a,b)=>b.timestamp - a.timestamp);
+            arr.forEach((w)=>{
+                const medal = w.position==1?'🥇':w.position==2?'🥈':w.position==3?'🥉':'🏅';
+                const timeAgo = new Date(w.timestamp).toLocaleDateString('en-PK');
+                html += `<div class="glass p-3 rounded-lg mb-2">
+                    <div class="flex justify-between items-center">
+                        <div class="flex items-center gap-3">
+                            <p class="text-2xl">${medal}</p>
+                            <div>
+                                <p class="font-bold text-green-400">${w.game_username}</p>
+                                <p class="text-xs text-gray-400">${w.tournament} • ${w.game}</p>
+                                <p class="text-xs text-gray-500">${timeAgo}</p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-lg font-bold text-yellow-400">PKR ${w.prize}</p>
+                            <p class="text-xs text-gray-400">Rank #${w.position}</p>
+                        </div>
+                    </div>
+                </div>`;
+            });
+        } else {
+            html += '<p class="text-gray-500 text-center glass p-3 rounded mb-4">No winners yet.</p>';
+        }
+        document.getElementById('leaderboardList').innerHTML = html;
+
+        db.ref('users').orderByChild('total_earned').limitToLast(10).once('value').then(snap2=>{
+            let earnersHtml = '<h3 class="text-lg font-bold mb-3 mt-6 text-green-400">Top Earners All Time</h3>';
+            if(snap2.exists()){
+                let earnersArr = [];
+                snap2.forEach(child=> earnersArr.push(child.val()));
+                earnersArr.reverse();
+                earnersArr.forEach((u, index)=>{
+                    if(u.total_earned > 0){
+                        earnersHtml += `<div class="glass p-3 rounded-lg mb-2 flex justify-between">
+                            <p class="font-bold">#${index+1} ${u.game_username || u.username}</p>
+                            <p class="font-bold text-yellow-400">PKR ${parseFloat(u.total_earned).toFixed(0)}</
+                   </p>
+                        </div>
+                    </div>`;
+                    }
+                });
+            } else {
+                earnersHtml += '<p class="text-gray-500 text-center">Koi earner nahi</p>';
+            }
+            document.getElementById('leaderboardList').innerHTML += earnersHtml;
+        });
+    });
+}
+
+function showDepositModal(){ document.getElementById('depositModal').classList.remove('hidden'); }
+function closeDepositModal(){ document.getElementById('depositModal').classList.add('hidden'); }
+
+function submitDeposit(){
+    const amount = parseFloat(document.getElementById('depositAmount').value);
+    const tid = document.getElementById('depositTid').value;
+    const method = document.getElementById('depositMethod').value;
+    if(!amount||!tid) return alert('Fill all fields');
+    db.ref('deposits').push({
+        user_id: currentUser.uid, amount: amount, transaction_id: tid,
+        payment_method: method, status: 'pending', created_at: Date.now()
+    });
+    alert('Deposit request submitted! Wait for approval.');
+    closeDepositModal();
+    document.getElementById('depositAmount').value='';
+    document.getElementById('depositTid').value='';
+}
+
+function showWithdrawModal(){ document.getElementById('withdrawModal').classList.remove('hidden'); }
+function closeWithdrawModal(){ document.getElementById('withdrawModal').classList.add('hidden'); }
+
+function submitWithdraw(){
+    const amount = parseFloat(document.getElementById('withdrawAmount').value);
+    const method = document.getElementById('withdrawMethod').value;
+    const account = document.getElementById('withdrawAccount').value;
+    const name = document.getElementById('withdrawName').value;
+    if(!amount||!account||!name) return alert('Fill all fields');
+    db.ref('users/'+currentUser.uid+'/wallet_balance').once('value').then(snap=>{
+        const balance = parseFloat(snap.val()||0);
+        if(amount > balance) return alert('Insufficient balance!');
+        if(amount < 100) return alert('Minimum withdraw is PKR 100');
+        db.ref('users/'+currentUser.uid+'/game_username').once('value').then(gsnap=>{
+            db.ref('withdraws').push({
+                user_id: currentUser.uid, amount: amount, payment_method: method,
+                account_number: account, account_name: name, game_username: gsnap.val() || 'Not Set',
+                status: 'pending', created_at: Date.now()
+            });
+            alert('Withdraw request submitted! Wait for approval');
+            closeWithdrawModal();
+            document.getElementById('withdrawAmount').value='';
+            document.getElementById('withdrawAccount').value='';
+            document.getElementById('withdrawName').value='';
+        });
+    });
+}
+
+function loadTransactions(){
+    db.ref('deposits').orderByChild('user_id').equalTo(currentUser.uid).on('value',(snap)=>{
+        const data = snap.val();
+        let html = '';
+        if(data){
+            Object.keys(data).forEach(key=>{
+                const d = data[key];
+                const statusColor = d.status=='completed'?'text-green-400':d.status=='pending'?'text-yellow-400':'text-red-400';
+                html += `<div class="glass p-3 rounded-lg mb-2 flex justify-between items-center">
+                    <div>
+                        <p class="font-bold text-green-400">+PKR ${d.amount}</p>
+                        <p class="text-xs text-gray-400">Deposit - ${d.payment_method}</p>
+                        <p class="text-xs text-gray-500">${new Date(d.created_at).toLocaleDateString()}</p>
+                    </div>
+                    <p class="text-xs ${statusColor}">${d.status}</p>
+                </div>`;
+            });
+        }
+
+        db.ref('withdraws').orderByChild('user_id').equalTo(currentUser.uid).once('value').then(wsnap=>{
+            const wdata = wsnap.val();
+            if(wdata){
+                Object.keys(wdata).forEach(key=>{
+                    const w = wdata[key];
+                    const statusColor = w.status=='completed'?'text-green-400':w.status=='pending'?'text-yellow-400':'text-red-400';
+                    html += `<div class="glass p-3 rounded-lg mb-2 flex justify-between items-center">
+                        <div>
+                            <p class="font-bold text-red-400">-PKR ${w.amount}</p>
+                            <p class="text-xs text-gray-400">Withdraw - ${w.payment_method}</p>
+                            <p class="text-xs text-gray-500">${new Date(w.created_at).toLocaleDateString()}</p>
+                        </div>
+                        <p class="text-xs ${statusColor}">${w.status}</p>
+                    </div>`;
+                });
+            }
+            document.getElementById('transactionHistory').innerHTML = html || '<p class="text-center text-gray-500">No transactions yet</p>';
+        });
+    });
+}
+</script>
+</body>
+</html>
