@@ -572,5 +572,23 @@ function loadTransactions(){
     });
 }
 </script>
+   <!-- Support Footer - Sirf Profile pe show hoga -->
+<div class="support-footer">
+    <i class="fa-solid fa-headset text-green-400"></i> 
+    Support: <a href="tel:03116611590">03116611590</a>
+    <a href="https://www.youtube.com/@devil_279-27?sub_confirmation=1" target="_blank" style="display:flex; align-items:center; justify-content:center; gap:8px; background:#FF0000; color:#ffffff; padding:14px; border-radius:10px; text-decoration:none; font-family:Arial,sans-serif; font-weight:bold; font-size:16px; margin-top:20px;">
+  <span style="font-size:20px;">▶️</span> Subscribe to our YouTube Channel
+</a>
+</div>
+
+<script>
+// Support button ko sirf profile tab pe show karna
+const originalShowPage = showPage;
+showPage = function(event, page){
+    originalShowPage(event, page);
+    const supportBtn = document.querySelector('.support-footer');
+    if(supportBtn) supportBtn.style.display = (page === 'profile') ? 'block' : 'none';
+}
+</script> 
 </body>
 </html>
