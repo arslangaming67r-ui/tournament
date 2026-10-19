@@ -362,8 +362,25 @@ body {
         <div id="tournamentList"></div>
 
     </div>
+    
 
+<!-- TOURNAMENT PRIZES PAGE -->
+<div id="prizesPage" class="p-4 hidden">
 
+    <button onclick="closeTournamentPrizes()"
+        class="bg-gray-700 px-4 py-2 rounded-lg mb-4">
+        <i class="fa-solid fa-arrow-left mr-2"></i>
+        Back
+    </button>
+
+    <h2 id="prizesTournamentTitle"
+        class="text-xl font-bold text-yellow-400 mb-4">
+        Tournament Prizes
+    </h2>
+
+    <div id="tournamentPrizesList"></div>
+
+</div>
     <!-- MY TOURNAMENTS -->
 
     <div id="myTournamentsPage" class="p-4 hidden">
@@ -1172,15 +1189,14 @@ function login(){
     }
 
 
-    auth.signInWithEmailAndPassword(
-        email,
-        pass
-    )
-    .catch((e) => {
-
-        alert("Login Error: " + e.message);
-
-    });
+    auth.signInWithEmailAndPassword(email, pass)
+.then(() => {
+    alert("Logged In Successfully!");
+})
+.catch((e) => {
+    console.error("Login error:", e);
+    alert("Login Error: " + e.message);
+});
 
 }
 
@@ -1800,54 +1816,21 @@ function loadTournaments(){
 
                 let rewardDetails = "";
 
-
-                if(rewardType === "perkill"){
-
-                    rewardDetails = `
-
-                    <div class="text-sm mb-3">
-
-                        <p class="font-bold text-green-400">
-
-                            <i class="fa-solid fa-crosshairs"></i>
-
-                            Per Kill:
-                            PKR ${t.per_kill_amount || 0}
-
-                        </p>
-
-                    </div>
-
-                    `;
-
-                }
-                else {
-
-                    rewardDetails = `
-
-                    <div class="text-xs text-gray-500 mb-3">
-
-                        <p>
-
-                            1st:
-                            PKR ${t.prize_1st || 0}
-
-                            2nd:
-                            PKR ${t.prize_2nd || 0}
-
-                            3rd:
-                            PKR ${t.prize_3rd || 0}
-
-                            4th:
-                            PKR ${t.prize_4th || 0}
-
-                        </p>
-
-                    </div>
-
-                    `;
-
-                }
+if (rewardType === "perkill") {
+    rewardDetails = `
+        <div class="text-sm mb-3 text-green-400">
+            Per Kill: PKR ${t.per_kill_amount || 0}
+        </div>`;
+} else {
+    rewardDetails = `
+        <button
+            onclick="openTournamentPrizes('${key}')"
+            class="w-full bg-purple-700 hover:bg-purple-600
+                   p-2 rounded-lg text-sm font-bold mb-3">
+            <i class="fa-solid fa-trophy mr-2"></i>
+            View Prizes & Positions
+        </button>`;
+}
 
 
                 const statusClass =
@@ -2057,6 +2040,190 @@ function loadTournaments(){
 }
 
 
+
+function openTournamentPrizes(tid) {
+    db.ref("tournaments/" + tid).once("value")
+    .then((snap) => {
+        const t = snap.val();
+
+        if (!t) {
+            alert("Tournament not found!");
+            return;
+        }
+
+        // Open prizes page
+        [
+            "homePage",
+            "myTournamentsPage",
+            "notificationsPage",
+            "leaderboardPage",
+            "walletPage",
+            "profilePage"
+        ].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.classList.add("hidden");
+        });
+
+        document.getElementById("prizesPage")
+            .classList.remove("hidden");
+
+        document.getElementById("prizesTournamentTitle")
+            .innerText = t.title || "Tournament Prizes";
+
+        const list = document.getElementById("tournamentPrizesList");
+
+        if (t.reward_type === "perkill") {
+            list.innerHTML = `
+                <div class="glass p-4 rounded-xl">
+                    <p class="text-green-400 font-bold">
+                        Per Kill: PKR ${Number(t.per_kill_amount) || 0}
+                    </p>
+                </div>`;
+            return;
+        }
+
+        // Store positions without duplicates
+        const prizeMap = new Map();
+
+        function addPrize(position, amount) {
+            const pos = Number(position);
+            if (!Number.isInteger(pos) || pos < 1) return;
+
+            let value = amount;
+
+            if (value && typeof value === "object") {
+                value = value.amount ?? value.prize ?? value.value ?? 0;
+            }
+
+            value = Number(value);
+            if (!Number.isFinite(value)) value = 0;
+
+            // Keep an existing valid amount unless it is missing
+            if (!prizeMap.has(pos) ||
+                (prizeMap.get(pos) === 0 && value > 0)) {
+                prizeMap.set(pos, value);
+            }
+        }
+
+        // 1. Admin Panel's actual format:
+        // prizes: [{ position: 1, amount: 1000 }, ...]
+        if (Array.isArray(t.prizes)) {
+            t.prizes.forEach(item => {
+                if (item && typeof item === "object") {
+                    addPrize(
+                        item.position ?? item.rank,
+                        item.amount ?? item.prize ?? item.value
+                    );
+                }
+            });
+        }
+
+        // 2. Also support prizes saved as an object
+        if (t.prizes && !Array.isArray(t.prizes)
+            && typeof t.prizes === "object") {
+            Object.keys(t.prizes).forEach(key => {
+                const item = t.prizes[key];
+                const match = String(key).match(/\d+/);
+                const position = item && typeof item === "object"
+                    ? (item.position ?? item.rank ?? match?.[0])
+                    : match?.[0];
+
+                addPrize(position, item);
+            });
+        }
+
+        // 3. Other possible position formats
+        ["positions", "prize_positions"].forEach(key => {
+            const data = t[key];
+            if (!data || typeof data !== "object") return;
+
+            if (Array.isArray(data)) {
+                data.forEach((item, index) => {
+                    if (item && typeof item === "object") {
+                        addPrize(
+                            item.position ?? item.rank ?? index + 1,
+                            item.amount ?? item.prize ?? item.value
+                        );
+                    } else {
+                        addPrize(index + 1, item);
+                    }
+                });
+            } else {
+                Object.keys(data).forEach(keyName => {
+                    const item = data[keyName];
+                    const match = String(keyName).match(/\d+/);
+                    const position = item && typeof item === "object"
+                        ? (item.position ?? item.rank ?? match?.[0])
+                        : match?.[0];
+
+                    addPrize(position, item);
+                });
+            }
+        });
+
+        // 4. Support legacy fields: prize_1st, prize_2nd, etc.
+        Object.keys(t).forEach(field => {
+            const match = field.match(
+                /^prize[_-]?(\d+)(?:st|nd|rd|th)?$/i
+            );
+
+            if (match) {
+                addPrize(Number(match[1]), t[field]);
+            }
+        });
+
+        // Sort all positions: 1, 2, 3 ... 10, 11 ...
+        const prizes = Array.from(prizeMap.entries())
+            .map(([position, amount]) => ({ position, amount }))
+            .sort((a, b) => a.position - b.position);
+
+        if (!prizes.length) {
+            list.innerHTML = `
+                <div class="glass p-4 rounded-xl text-gray-400">
+                    No prizes have been added yet.
+                </div>`;
+            return;
+        }
+
+        function ordinal(n) {
+            if (n % 100 >= 11 && n % 100 <= 13) {
+                return n + "th";
+            }
+
+            switch (n % 10) {
+                case 1: return n + "st";
+                case 2: return n + "nd";
+                case 3: return n + "rd";
+                default: return n + "th";
+            }
+        }
+
+        list.innerHTML = prizes.map(p => `
+            <div class="glass p-4 rounded-xl mb-3
+                        flex justify-between items-center gap-3">
+                <span class="font-bold">
+                    ${ordinal(p.position)} Position
+                </span>
+
+                <span class="text-yellow-400 font-bold">
+                    PKR ${p.amount.toLocaleString("en-PK")}
+                </span>
+            </div>
+        `).join("");
+    })
+    .catch(error => {
+        console.error("Prize loading error:", error);
+        alert("Could not load tournament prizes.");
+    });
+}
+
+function closeTournamentPrizes() {
+    document.getElementById("prizesPage")
+        .classList.add("hidden");
+
+    document.getElementById("homePage")
+        .classList.remove("hidden");
+}
 /* =====================================================
    LOAD MY TOURNAMENTS
 ===================================================== */
